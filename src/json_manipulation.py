@@ -77,7 +77,26 @@ def reformat_cols(df: pd.DataFrame) -> pd.DataFrame:
     })
     return df
     
+"""
+Save df as a JSON file in specific directory. Makes directory if it does not exist.
+
+@param: directory: str - directory to save the file
+@param: filename: str - name of the file
+@param: df: pd.DataFrame - DataFrame to save
+@returns: str - path to the saved file
+"""
+def save_json_file(directory, filename, df):
     
+    filepath = os.path.join(directory, filename)
+
+    # Ensure the directory exists (create it if not)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    # Save the DataFrame to a JSON file
+    df.to_json(filepath, orient='records', indent=4) 
+    
+    return filepath 
     
     
 """
@@ -120,3 +139,4 @@ if __name__ == "__main__":
     df_2025 = reformat_cols(df_2025)
     
     print(df_2025)
+    
