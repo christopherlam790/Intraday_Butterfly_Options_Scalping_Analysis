@@ -131,7 +131,13 @@ def add_momentum_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+"""
+Adds volume based indicators to df
 
+@param df: pd.DataFrame = input DataFrame
+@returns pd.DataFrame
+
+"""
 def add_volume_indicator(df: pd.DataFrame) -> pd.DataFrame:
     
     # Rolling Windows
@@ -147,6 +153,50 @@ def add_volume_indicator(df: pd.DataFrame) -> pd.DataFrame:
     df["vwap_9_rolling"] = ta.volume.volume_weighted_average_price(df['high'], df['low'], df['close'], df['volume'], window=9) #45 min
     df["vwap_12_rolling"] = ta.volume.volume_weighted_average_price(df['high'], df['low'], df['close'], df['volume'], window=12) #60 min
     
+        #CMF (Standard)
+    df['cmf_7_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=7)
+    df['cmf_14_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=14)
+    df['cmf_21_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=21)
+    
+        #CMF (Custom)
+    df['cmf_3_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=3) #15 min
+    df['cmf_6_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=6) #30 min
+    df['cmf_9_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=9) #45 min
+    df['cmf_12_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=12) #60 min
+    
+        #OBV (Standard)
+    df['obv_rolling'] = ta.volume.on_balance_volume(df['close'], df['volume'])
+    
+    # Isolated Windows
+    assert df.index.tz is not None
+    df["trade_date"] = df.index.date
+    
+        #VWAP (Standard)
+    df["vwap_7_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.volume_weighted_average_price(x['high'], x['low'], x['close'], x['volume'], window=7))
+    df["vwap_14_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.volume_weighted_average_price(x['high'], x['low'], x['close'], x['volume'], window=14))
+    df["vwap_21_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.volume_weighted_average_price(x['high'], x['low'], x['close'], x['volume'], window=21))
+    
+        #VWAP (Custom)
+    df["vwap_3_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.volume_weighted_average_price(x['high'], x['low'], x['close'], x['volume'], window=3)) #15 min
+    df["vwap_6_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.volume_weighted_average_price(x['high'], x['low'], x['close'], x['volume'], window=6)) #30 min
+    df["vwap_9_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.volume_weighted_average_price(x['high'], x['low'], x['close'], x['volume'], window=9)) #45 min
+    df["vwap_12_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.volume_weighted_average_price(x['high'], x['low'], x['close'], x['volume'], window=12)) #60 min
+    
+        #CMF (Standard)
+    df['cmf_7_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.chaikin_money_flow(x['high'], x['low'], x['close'], x['volume'], window=7))
+    df['cmf_14_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.chaikin_money_flow(x['high'], x['low'], x['close'], x['volume'], window=14))
+    df['cmf_21_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.chaikin_money_flow(x['high'], x['low'], x['close'], x['volume'], window=21))
+    
+        #CMF (Custom)
+    df['cmf_3_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.chaikin_money_flow(x['high'], x['low'], x['close'], x['volume'], window=3)) #15 min
+    df['cmf_6_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.chaikin_money_flow(x['high'], x['low'], x['close'], x['volume'], window=6)) #30 min
+    df['cmf_9_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.chaikin_money_flow(x['high'], x['low'], x['close'], x['volume'], window=9)) #45 min
+    df['cmf_12_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.chaikin_money_flow(x['high'], x['low'], x['close'], x['volume'], window=12)) #60 min
+    
+        #OBV (Standard)
+    df['obv_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volume.on_balance_volume(x['close'], x['volume']))
+    
+    df.drop(columns=["trade_date"], inplace=True)
     
     return df
 
