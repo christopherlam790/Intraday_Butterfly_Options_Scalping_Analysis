@@ -1,13 +1,8 @@
-from dotenv import load_dotenv
 import os
 import json
 import pandas as pd
 from typing import List, Dict, Any
 
-
-load_dotenv()
-
-API_KEY = os.getenv("MASSIVE_API_KEY")
 
 """
 Gets the results from a single JSON file and returns as a DataFrame.
@@ -42,40 +37,33 @@ Aggregate multiple JSON results into a single DataFrame; Calls on get_json_resul
 """
 def aggregate_json_results(json_paths: List[str]) -> pd.DataFrame:
     
+        
+    """
+    Gets the results from a single JSON file and returns as a DataFrame.
+
+    @param: json_path: str - path to the JSON file
+    @retruns: pd.DataFrame
+    @raises: FileNotFoundError, json.JSONDecodeError
+    """
+    def get_json_results(json_path) -> pd.DataFrame:
+        try:
+            with open(json_path, 'r') as file:
+                data = json.load(file)
+            
+            file.close()
+            
+            return pd.DataFrame(data["results"])
+
+        except FileNotFoundError:
+            print("Error: The file was not found.")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")
+            return None
+    
+    
     return pd.concat([get_json_results(path) for path in json_paths], ignore_index=True)
     
-    
-"""
-Reformats the columns of the DataFrame to be more user-friendly.
-
-@param: df: pd.DataFrame - input DataFrame
-@returns: pd.DataFrame
-@raises: ValueError - if required columns are missing
-"""
-def reformat_cols(df: pd.DataFrame) -> pd.DataFrame:
-    
-    req_cols = ["t", "o", "h", "l", "c", "v", "vw", "n"]
-    
-    if not all(col in df.columns for col in req_cols):
-        raise ValueError("DataFrame is missing required columns.")
-    
-    df["datetime"] = pd.to_datetime(df["t"], unit="ms", utc=True)
-    df["datetime_est"] = df["datetime"].dt.tz_convert("America/New_York")
-    
-    df = df.set_index("datetime_est")
-    df = df.between_time("09:30", "16:00")
-    
-    df = df.rename(columns={
-        "t": "UTC_timestamp",
-        "o": "open",
-        "h": "high",
-        "l": "low",
-        "c": "close",
-        "v": "volume",
-        "vw": "volume_weighted_average_price",
-        "n": "number_of_trades",
-    })
-    return df
     
 """
 Save df as a JSON file in specific directory. Makes directory if it does not exist.
@@ -116,8 +104,6 @@ if __name__ == "__main__":
                             "assets/raw/2024_5_minute/12_2024_5_minute_SPY.json",
                           ])
     
-    df_2024 = reformat_cols(df_2024)
-
     
     print(df_2024)
 
@@ -135,8 +121,6 @@ if __name__ == "__main__":
                             "assets/raw/2025_5_minute/12_2025_5_minute_SPY.json",
                           ])
 
-
-    df_2025 = reformat_cols(df_2025)
     
     print(df_2025)
     
