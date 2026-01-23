@@ -42,18 +42,6 @@ Adds momentum based indicators (RSI, ROC) to df
 """
 def add_momentum_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
-    # Rolling Windows
-    
-        #RSI (Custom)
-    df['rsi_3_rolling'] = ta.momentum.rsi(df['close'], window=3) #15 min
-    df['rsi_6_rolling'] = ta.momentum.rsi(df['close'], window=6) #30 min
-    df['rsi_12_rolling'] = ta.momentum.rsi(df['close'], window=12) #60 min
-    
-        #ROC (Custom)
-    df['roc_3_rolling'] = ta.momentum.roc(df['close'], window=3) #15 min
-    df['roc_6_rolling'] = ta.momentum.roc(df['close'], window=6) #30 min
-    df['roc_12_rolling'] = ta.momentum.roc(df['close'], window=12) #60 min
-    
     # Isolated Windows    
     
     assert df.index.tz is not None
@@ -88,7 +76,6 @@ def add_volume_indicator(df: pd.DataFrame) -> pd.DataFrame:
     # Rolling Windows
 
         #CMF (Custom)
-    df['cmf_3_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=3) #15 min
     df['cmf_6_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=6) #30 min
     df['cmf_12_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=12) #60 min
     
@@ -124,7 +111,6 @@ def add_volatility_indicators(df: pd.DataFrame) -> pd.DataFrame:
     #Rolling Windows
 
         #ATR (Custom)
-    df['atr_3_rolling'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=3) #15 min
     df['atr_6_rolling'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=6) #30 min
     df['atr_12_rolling'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=12) #60 min
 
@@ -156,12 +142,10 @@ def add_trend_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # Rolling Windows
 
         # ADX (Custom)
-    df["adx_3_rolling"] = ta.trend.adx(df['high'], df['low'], df['close'], window=3) #15 min
     df["adx_6_rolling"] = ta.trend.adx(df['high'], df['low'], df['close'], window=6) #30 min
     df["adx_12_rolling"] = ta.trend.adx(df['high'], df['low'], df['close'], window=12) #60 min
 
         #EMAs (Custom)
-    df["ema_3_rolling"] = ta.trend.ema_indicator(df['close'], window=3) #15 min
     df["ema_6_rolling"] = ta.trend.ema_indicator(df['close'], window=6) #30 min
     df["ema_12_rolling"] = ta.trend.ema_indicator(df['close'], window=12) #60 min
     
@@ -169,15 +153,9 @@ def add_trend_indicators(df: pd.DataFrame) -> pd.DataFrame:
     assert df.index.tz is not None
     df["trade_date"] = df.index.date
     
-        # ADX (Custom)
-    df["adx_3_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.trend.adx(x['high'], x['low'], x['close'], window=3)) #15 min
-    df["adx_6_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.trend.adx(x['high'], x['low'], x['close'], window=6)) #30 min
-    df["adx_12_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.trend.adx(x['high'], x['low'], x['close'], window=12)) #60 min
-    
         #EMAs (Custom)
     df['ema_3_isolated'] = df.groupby("trade_date", group_keys=False)["close"].apply(lambda x: ta.trend.ema_indicator(x, window=3)) #15 min
     df['ema_6_isolated'] = df.groupby("trade_date", group_keys=False)["close"].apply(lambda x: ta.trend.ema_indicator(x, window=6)) #30 min
-    df['ema_12_isolated'] = df.groupby("trade_date", group_keys=False)["close"].apply(lambda x: ta.trend.ema_indicator(x, window=12)) #60 min
 
     
     df.drop(columns=["trade_date"], inplace=True)
@@ -203,6 +181,12 @@ def add_ta_indicators(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
+"""
+Time (in minutes) till end of trading day (EOD)
+"""
+def add_time_till_eod(df: pd.DataFrame) -> pd.DataFrame:
+    df['time_till_eod'] = ((16 - df.index.hour) * 60) - df.index.minute
+    return df
 
 
 """
@@ -219,6 +203,7 @@ def preprocess_data(df: pd.DataFrame, cols_to_drop: list = [], rth:bool =True) -
     df = add_timestamps(df, rth)
     df = add_ta_indicators(df)
     df = clean_df(df, cols_to_drop=cols_to_drop)
+    df = add_time_till_eod(df)
     
     return df
 
@@ -234,10 +219,5 @@ if __name__ == "__main__":
 
     df = preprocess_data(df, cols_to_drop=cols_to_drop, rth=True)
 
-    list = []
-    for i in df.columns:
-        list.append(i)
-        
-    print(list)
     
     
