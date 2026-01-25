@@ -1,7 +1,8 @@
 import pandas as pd
-import json
 import ta
 from ta.utils import dropna
+import math
+import numpy as np
 
 from json_manipulation import get_json_results
     
@@ -183,10 +184,57 @@ def add_ta_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 """
 Time (in minutes) till end of trading day (EOD)
+@param df: pd.DataFrame = input DataFrame
+@returns pd.DataFrame
 """
 def add_time_till_eod(df: pd.DataFrame) -> pd.DataFrame:
     df['time_till_eod'] = ((16 - df.index.hour) * 60) - df.index.minute
     return df
+
+
+def add_vol_regime_approx(df: pd.DataFrame) -> pd.DataFrame:
+    
+    """
+    Garman-Klass Volatility Estimator
+    @param df: pd.DataFrame - input DataFrame
+    @param window: int - rolling window size
+    @param trading_periods: int - number of trading periods in a year
+    @returns: pd.Series
+    """
+    def garman_klass(df, window=30, trading_periods=252) -> pd.Series:
+
+        log_hl = (df["high"] / df["low"]).apply(np.log)
+        log_co = (df["close"] / df["open"]).apply(np.log)
+
+        rs = 0.5 * log_hl ** 2 - (2 * math.log(2) - 1) * log_co ** 2
+
+        def f(v):
+            return (trading_periods * v.mean()) ** 0.5
+
+        result = rs.rolling(window=window, center=False).apply(func=f)
+
+        return result
+    
+    # Garman-Klass Volatility Regime Approximation, adjusted for 5-min data (78 periods per trading day)
+    df["gk_fast"] = garman_klass(df, window=18, trading_periods=78*252)
+    df["gk_slow"] = garman_klass(df, window=36, trading_periods=78*252)
+
+    # Regime Approximation
+    df["vol_regime_gk18_gk36"] = df["gk_fast"] / df["gk_slow"]
+    df["butterfly_is_favorable_vol_regime_1_00"] = np.where((df["vol_regime_gk18_gk36"] < 1.00) 
+                                                         & (df["gk_fast"].diff() <= 0), 1, 0) # Aggressive
+    df["butterfly_is_favorable_vol_regime_0_95"] = np.where((df["vol_regime_gk18_gk36"] < 0.95) 
+                                                         & (df["gk_fast"].diff() <= 0), 1, 0) # Moderate
+    df["butterfly_is_favorable_vol_regime_0_90"] = np.where((df["vol_regime_gk18_gk36"] < 0.90) 
+                                                         & (df["gk_fast"].diff() <= 0), 1, 0) # Conservative
+
+
+    #Remove unecassary cols
+    df.drop(columns=["gk_fast", "gk_slow"], inplace=True)
+    
+    return df
+
+
 
 
 """
@@ -202,8 +250,13 @@ def preprocess_data(df: pd.DataFrame, cols_to_drop: list = [], rth:bool =True) -
     
     df = add_timestamps(df, rth)
     df = add_ta_indicators(df)
-    df = clean_df(df, cols_to_drop=cols_to_drop)
+
     df = add_time_till_eod(df)
+    df = add_vol_regime_approx(df)
+    
+    
+    df = clean_df(df, cols_to_drop=cols_to_drop)
+    
     
     return df
 
@@ -219,5 +272,4 @@ if __name__ == "__main__":
 
     df = preprocess_data(df, cols_to_drop=cols_to_drop, rth=True)
 
-    
-    
+    print(df)
