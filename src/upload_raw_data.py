@@ -86,7 +86,12 @@ def upload_data_as_postgressql(df: pd.DataFrame, table_name: str) -> None:
         ema_6_rolling DOUBLE PRECISION,
         ema_12_rolling DOUBLE PRECISION,
 
-        time_till_eod INTEGER
+        time_till_eod INTEGER,
+        
+        vol_regime_gk18_gk36 DOUBLE PRECISION,
+        butterfly_is_favorable_vol_regime_1_00 INTEGER,
+        butterfly_is_favorable_vol_regime_0_95 INTEGER,
+        butterfly_is_favorable_vol_regime_0_90 INTEGER
     );
     """)
 
