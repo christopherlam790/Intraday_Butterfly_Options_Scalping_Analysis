@@ -191,7 +191,11 @@ def add_time_till_eod(df: pd.DataFrame) -> pd.DataFrame:
     df['time_till_eod'] = ((16 - df.index.hour) * 60) - df.index.minute
     return df
 
-
+"""
+Adds approximate sticky volatility regime indicator
+@param df: pd.DataFrame - input DataFrame
+@returns: pd.DataFrame
+"""
 def add_vol_regime_approx(df: pd.DataFrame) -> pd.DataFrame:
     
     """
