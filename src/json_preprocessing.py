@@ -203,35 +203,34 @@ def add_vol_regime_approx(df: pd.DataFrame) -> pd.DataFrame:
     """
     def garman_klass(df, window=30, trading_periods=252) -> pd.Series:
 
-        log_hl = (df["high"] / df["low"]).apply(np.log)
-        log_co = (df["close"] / df["open"]).apply(np.log)
+        log_hl = np.log(df["high"] / df["low"])
+        log_co = np.log(df["close"] / df["open"])
 
-        rs = 0.5 * log_hl ** 2 - (2 * math.log(2) - 1) * log_co ** 2
+        rs = 0.5 * log_hl**2 - (2 * math.log(2) - 1) * log_co**2
 
-        def f(v):
-            return (trading_periods * v.mean()) ** 0.5
-
-        result = rs.rolling(window=window, center=False).apply(func=f)
+        result = rs.rolling(window).mean()
+        result = np.sqrt(trading_periods * result)
 
         return result
+
     
-    # Garman-Klass Volatility Regime Approximation, adjusted for 5-min data (78 periods per trading day)
-    df["gk_fast"] = garman_klass(df, window=18, trading_periods=78*252)
-    df["gk_slow"] = garman_klass(df, window=36, trading_periods=78*252)
-
-    # Regime Approximation
-    df["vol_regime_gk18_gk36"] = df["gk_fast"] / df["gk_slow"]
-    df["butterfly_is_favorable_vol_regime_1_00"] = np.where((df["vol_regime_gk18_gk36"] < 1.00) 
-                                                         & (df["gk_fast"].diff() <= 0), 1, 0) # Aggressive
-    df["butterfly_is_favorable_vol_regime_0_95"] = np.where((df["vol_regime_gk18_gk36"] < 0.95) 
-                                                         & (df["gk_fast"].diff() <= 0), 1, 0) # Moderate
-    df["butterfly_is_favorable_vol_regime_0_90"] = np.where((df["vol_regime_gk18_gk36"] < 0.90) 
-                                                         & (df["gk_fast"].diff() <= 0), 1, 0) # Conservative
-
-
-    #Remove unecassary cols
-    df.drop(columns=["gk_fast", "gk_slow"], inplace=True)
+    GK_fast = garman_klass(df, window=12, trading_periods=78*252)
+    GK_mid  = garman_klass(df, window=24, trading_periods=78*252)
+    GK_slow = garman_klass(df, window=72, trading_periods=78*252)
     
+
+    vol_ok = (GK_fast < GK_mid) & (GK_mid < GK_slow)
+
+    compression_ratio = GK_fast / GK_mid
+    compression_ok = (compression_ratio >= 0.85) & (compression_ratio <= 0.95)
+
+    decay_ok = GK_fast.diff() <= 0
+
+    
+    # Is a "sticky" volatility regime
+    df["is_sticky_vol_regime"] = vol_ok & compression_ok & decay_ok
+
+
     return df
 
 

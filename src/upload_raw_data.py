@@ -88,10 +88,7 @@ def upload_data_as_postgressql(df: pd.DataFrame, table_name: str) -> None:
 
         time_till_eod INTEGER,
         
-        vol_regime_gk18_gk36 DOUBLE PRECISION,
-        butterfly_is_favorable_vol_regime_1_00 INTEGER,
-        butterfly_is_favorable_vol_regime_0_95 INTEGER,
-        butterfly_is_favorable_vol_regime_0_90 INTEGER
+        is_sticky_vol_regime BOOLEAN
     );
     """)
 
@@ -143,11 +140,11 @@ Testing Section
 if __name__ == "__main__":
 
 
-    df_sql = upload_raw_data(path="assets/raw/2024_5_minute/annual_2024_5_minute_SPY.json",
+    df_sql = upload_raw_data(path="assets/raw/2025_5_minute/annual_2025_5_minute_SPY.json",
                     cols_to_drop=["volume_weighted_average_price", "UTC_timestamp", "datetime"],
                     rth=True)
 
-    upload_data_as_postgressql(df_sql, table_name="spy_2024_5_minute_annual")
+    upload_data_as_postgressql(df_sql, table_name="spy_2025_5_minute_annual")
     
     print("TESTING COMPLETE")
     
