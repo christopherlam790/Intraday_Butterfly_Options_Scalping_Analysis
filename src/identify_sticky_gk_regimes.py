@@ -6,12 +6,11 @@ import os
 from dotenv import load_dotenv
 
 """
-Identify sticky GK regimes from SQL table
+Get sticky GK regime data from SQL table
 @param table_name: str - name of the SQL table
-@param visualize: bool - whether to visualize the results
 @returns: pd.DataFrame
 """
-def identify_sticky_gk_regimes(table_name: str, visualize_fig = False, save_fig = False) -> pd.DataFrame:
+def get_sticky_regime_data(table_name: str) -> pd.DataFrame:
     
     # Connect to DB
     try:
@@ -45,65 +44,77 @@ def identify_sticky_gk_regimes(table_name: str, visualize_fig = False, save_fig 
         
         conn.close()
         
-        def visualize_sticky_volatility_probability_vs_time_to_eod(df: pd.DataFrame, save_fig: bool = False) -> None:
-        
-            fig, ax = plt.subplots(figsize=(10, 5))
 
-            ax.plot(df["time_till_eod"], df["sticky_prob"])
-            ax.set_xlabel("Minutes to EOD")
-            ax.set_ylabel("P(Sticky Vol Regime)")
-            ax.set_title(f"{table_name} Sticky Volatility Probability vs Time to EOD")
-
-            # Hour bands
-            ax.axvline(360, color='black', linestyle='--', alpha=0.4) #10:00 am
-            ax.axvline(300, color='black', linestyle='--', alpha=0.4) # 11:00 am
-            ax.axvline(240, color='black', linestyle='--', alpha=0.4) # 12:00 pm
-            ax.axvline(180, color='black', linestyle='--', alpha=0.4) # 1:00 pm
-            ax.axvline(120, color='black', linestyle='--', alpha=0.4) # 2:00 pm
-            ax.axvline(60, color='black', linestyle='--', alpha=0.4) # 3:00 pm
-            
-            # Intraday regimes
-            ax.axvspan(390, 330, color='b', alpha=0.3, label='Market Open Power Hour (9:30–10:30pm)')
-            ax.axvspan(330, 270, color='g', alpha=0.3, label='Early Morning (10:30–11:30pm)')
-            ax.axvspan(270, 150, color='y', alpha=0.3, label='Midday (11:30–1:30pm)')
-            ax.axvspan(150, 60,  color='r', alpha=0.3, label='Afternoon (1:30–3:00pm)')
-            ax.axvspan(60,  0,   color='c', alpha=0.3, label='Close Power Hour (3:00–4:00pm)')
-            
-            # Stickiness thresholds
-            ax.axhline(0.05, color='black', linestyle='--', label='5%', alpha=0.3)
-            ax.axhline(0.10, color='black', linestyle='--', label='10%', alpha=0.3)
-            ax.axhline(0.15, color='black', linestyle='--', label='15%', alpha=0.3)
-
-            # Legend outside plot
-            ax.legend(
-                loc="center left",
-                bbox_to_anchor=(1.02, 0.5),
-                borderaxespad=0
-            )
-
-            plt.tight_layout()
-
-            
-            if save_fig:
-                plt.savefig(f"assets/charts/{table_name}_sticky_volatility_probability_vs_time_to_eod.png")
-            plt.show()
-
-            
-            return None
-            
-        if visualize_fig:
-            visualize_sticky_volatility_probability_vs_time_to_eod(df, save_fig=save_fig)
-            
         return df
 
     except:
         raise Exception("Failed to pull data; Check df integrity & schema")
 
 
+"""
+Visualize sticky volatility probability vs time to EOD
+@param df: pd.DataFrame - DataFrame with 'time_till_eod' and 'sticky_prob' columns
+@param plot_name: str - name for the plot
+@param save_fig: bool - whether to save the figure
+@returns: None
+"""
+def visualize_sticky_volatility_probability_vs_time_to_eod(df: pd.DataFrame, plot_name: str, save_fig: bool = False) -> None:
+        
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        ax.plot(df["time_till_eod"], df["sticky_prob"])
+        ax.set_xlabel("Minutes to EOD")
+        ax.set_ylabel("P(Sticky Vol Regime)")
+        ax.set_title(f"{plot_name} Sticky Volatility Probability vs Time to EOD")
+
+        # Hour bands
+        ax.axvline(360, color='black', linestyle='--', alpha=0.4) #10:00 am
+        ax.axvline(300, color='black', linestyle='--', alpha=0.4) # 11:00 am
+        ax.axvline(240, color='black', linestyle='--', alpha=0.4) # 12:00 pm
+        ax.axvline(180, color='black', linestyle='--', alpha=0.4) # 1:00 pm
+        ax.axvline(120, color='black', linestyle='--', alpha=0.4) # 2:00 pm
+        ax.axvline(60, color='black', linestyle='--', alpha=0.4) # 3:00 pm
+        
+        # Intraday regimes
+        ax.axvspan(390, 330, color='b', alpha=0.3, label='Market Open Power Hour (9:30–10:30pm)')
+        ax.axvspan(330, 270, color='g', alpha=0.3, label='Early Morning (10:30–11:30pm)')
+        ax.axvspan(270, 150, color='y', alpha=0.3, label='Midday (11:30–1:30pm)')
+        ax.axvspan(150, 60,  color='r', alpha=0.3, label='Afternoon (1:30–3:00pm)')
+        ax.axvspan(60,  0,   color='c', alpha=0.3, label='Close Power Hour (3:00–4:00pm)')
+        
+        # Stickiness thresholds
+        ax.axhline(0.05, color='black', linestyle='--', label='5%', alpha=0.3)
+        ax.axhline(0.10, color='black', linestyle='--', label='10%', alpha=0.3)
+        ax.axhline(0.15, color='black', linestyle='--', label='15%', alpha=0.3)
+
+        # Legend outside plot
+        ax.legend(
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            borderaxespad=0
+        )
+
+        plt.tight_layout()
+
+        
+        if save_fig:
+            plt.savefig(f"assets/charts/{plot_name}_sticky_volatility_probability_vs_time_to_eod.png")
+        plt.show()
+
+        
+        return None
+        
+
+
+def identify_sticky_gk_regimes(table_name: str, visualize_fig: bool = False, save_fig: bool = False) -> None:
+    df = get_sticky_regime_data(table_name=table_name)
+    visualize_sticky_volatility_probability_vs_time_to_eod(df, plot_name=table_name, save_fig=save_fig)
+
+    pass
 
 if __name__ == "__main__":
 
 
-    df = identify_sticky_gk_regimes(table_name="spy_2025_5_minute_annual", visualize_fig=True, save_fig=True)
+    df = identify_sticky_gk_regimes(table_name="spy_2025_5_minute_annual")
 
     print(df)
