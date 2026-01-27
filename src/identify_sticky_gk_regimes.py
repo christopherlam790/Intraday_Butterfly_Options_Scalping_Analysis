@@ -45,8 +45,8 @@ def identify_sticky_gk_regimes(table_name: str, visualize_fig = False, save_fig 
         
         conn.close()
         
+        def visualize_sticky_volatility_probability_vs_time_to_eod(df: pd.DataFrame, save_fig: bool = False) -> None:
         
-        if visualize_fig:
             fig, ax = plt.subplots(figsize=(10, 5))
 
             ax.plot(df["time_till_eod"], df["sticky_prob"])
@@ -88,6 +88,11 @@ def identify_sticky_gk_regimes(table_name: str, visualize_fig = False, save_fig 
                 plt.savefig(f"assets/charts/{table_name}_sticky_volatility_probability_vs_time_to_eod.png")
             plt.show()
 
+            
+            return None
+            
+        if visualize_fig:
+            visualize_sticky_volatility_probability_vs_time_to_eod(df, save_fig=save_fig)
             
         return df
 
