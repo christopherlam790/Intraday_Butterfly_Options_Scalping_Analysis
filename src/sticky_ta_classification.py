@@ -203,7 +203,12 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
 
 
 
-
+    """
+    General heuristic func for RSI - returns overall heuristic score of ROC
+    @param heuristic_weights: dict - dict of weights for heuristic
+    @param weights: list - list of weights for roc periods
+    @returns: float
+    """
     def heuristic_sticky_roc_tas(
         weights: list = [0.2, 0.3, 0.5],
         heuristic_weights: dict = {
@@ -214,6 +219,14 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
         }
     ) -> float:
 
+        """
+        Heuristic for range compression of ROC - Measures if ROC is in a tight range or not
+        @param group: col to group by
+        @param col_name: col name to operate on (roc_3, roc_6, roc_12)
+        @param weight: weight of heuristic
+        @param min_required: minutes required to calculate - Nan otherwise
+        @returns: float
+        """
         def heuristic_roc_range_compression(group, col_name, weight, min_required):
             roc_values = group[col_name].dropna()
             if len(roc_values) >= min_required:
@@ -224,6 +237,15 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
                     return score * weight
             return np.nan
 
+
+        """
+        Heuristic for zero gravity of ROC - Measures if ROC stays close to 0
+        @param group: col to group by
+        @param col_name: col name to operate on (roc_3, roc_6, roc_12)
+        @param weight: weight of heuristic
+        @param min_required: minutes required to calculate - Nan otherwise
+        @returns: float
+        """ 
         def heuristic_roc_zero_gravity(group, col_name, weight, min_required):
             roc_values = group[col_name].dropna()
             if len(roc_values) >= min_required:
@@ -233,6 +255,16 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
                 return score * weight
             return np.nan
 
+
+
+        """
+        Heuristic for std for ROC
+        @param group: col to group by
+        @param col_name: col name to operate on (roc_3, roc_6, roc_12)
+        @param weight: weight of heuristic
+        @param min_required: minutes required to calculate - Nan otherwise
+        @returns: float
+        """
         def heuristic_roc_volatility_compression(group, col_name, weight, min_required):
             roc_values = group[col_name].dropna()
             if len(roc_values) >= min_required:
@@ -242,6 +274,15 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
                 return score * weight
             return np.nan
 
+
+        """
+        Heuristic for if ROC has directional bias
+        @param group: col to group by
+        @param col_name: col name to operate on (roc_3, roc_6, roc_12)
+        @param weight: weight of heuristic
+        @param min_required: minutes required to calculate - Nan otherwise
+        @returns: float
+        """
         def heuristic_roc_neutrality(group, col_name, weight, min_required):
             roc_values = group[col_name].dropna()
             if len(roc_values) >= min_required:
@@ -323,14 +364,8 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
         
         # Calculate overall score
         overall_score = np.nanmedian(daily_scores['final_roc_heuristic'])
-        
-        print(overall_score)
-
-
 
         return overall_score
-
-
 
 
     if ta_indicator == "rsi":
@@ -341,6 +376,29 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
         
         raise Exception("Invalid ta indicator; Must be 'rsi' or 'roc'")
 
+
+
+def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_till_eod: int, end_time_till_eod:int) -> float:
+    
+    def heuristic_sticky_vwap_tas():
+    
+        pass
+    
+    
+    def heuristic_sticky_cmf_tas():
+        pass
+    
+    
+    
+    if ta_indicator == "vwap":
+        return heuristic_sticky_vwap_tas()
+    elif ta_indicator == "cmf":
+        return heuristic_sticky_cmf_tas()
+    else:
+        
+        raise Exception("Invalid ta indicator; Must be 'rsi' or 'roc'")
+ 
+    
 
 
 def heuristic_sticky_tas(table_name: str) -> float:
