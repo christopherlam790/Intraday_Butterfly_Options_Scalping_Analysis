@@ -64,27 +64,24 @@ def upload_data_as_postgressql(df: pd.DataFrame, table_name: str) -> None:
         cmf_3_isolated DOUBLE PRECISION,
         cmf_6_isolated DOUBLE PRECISION,
         cmf_12_isolated DOUBLE PRECISION,
-        cmf_6_rolling DOUBLE PRECISION,
-        cmf_12_rolling DOUBLE PRECISION,
+
 
         vwap_3_isolated DOUBLE PRECISION,
         vwap_6_isolated DOUBLE PRECISION,
         vwap_12_isolated DOUBLE PRECISION,
 
-        atr_6_rolling DOUBLE PRECISION,
-        atr_12_rolling DOUBLE PRECISION,
+        atr_6_isolated DOUBLE PRECISION,
+        atr_12_isolated DOUBLE PRECISION,
 
         bb_width_3_isolated DOUBLE PRECISION,
         bb_width_6_isolated DOUBLE PRECISION,
         bb_width_12_isolated DOUBLE PRECISION,
 
-        adx_6_rolling DOUBLE PRECISION,
-        adx_12_rolling DOUBLE PRECISION,
+        adx_6_isolated DOUBLE PRECISION,
+        adx_12_isolated DOUBLE PRECISION,
 
         ema_3_isolated DOUBLE PRECISION,
         ema_6_isolated DOUBLE PRECISION,
-        ema_6_rolling DOUBLE PRECISION,
-        ema_12_rolling DOUBLE PRECISION,
 
         time_till_eod INTEGER,
         
@@ -140,11 +137,11 @@ Testing Section
 if __name__ == "__main__":
 
 
-    df_sql = upload_raw_data(path="assets/raw/2025_5_minute/annual_2025_5_minute_SPY.json",
+    df_sql = upload_raw_data(path="assets/raw/2024_5_minute/annual_2024_5_minute_SPY.json",
                     cols_to_drop=["volume_weighted_average_price", "UTC_timestamp", "datetime"],
                     rth=True)
 
-    upload_data_as_postgressql(df_sql, table_name="spy_2025_5_minute_annual")
+    upload_data_as_postgressql(df_sql, table_name="spy_2024_5_minute_annual")
     
     print("TESTING COMPLETE")
     
