@@ -613,9 +613,131 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
          
         return overall_score
     
-    
-    def heuristic_sticky_cmf_tas():
-        pass
+        
+    def heuristic_sticky_cmf_tas(
+        heuristic_weights: dict = {
+            'range_compression': 0.35,      # CMF range stability
+            'neutrality': 0.30,             # How close to zero
+            'volatility_compression': 0.20, # CMF std dev
+            'extreme_avoidance': 0.15       # Avoid strong directional flow
+        },
+        cmf_period_weights: list = [0.2,0.3, 0.5],  # Weights for CMF_6_rolling, CMF_12_rolling, CMF_3/6/12_iso
+    ) -> float:
+                
+        def heuristic_cmf_range_compression(group, col_name, weight, min_required):
+            cmf_values = group[col_name].dropna()
+            if len(cmf_values) >= min_required:
+                cmf_range = cmf_values.max() - cmf_values.min()
+                if pd.notna(cmf_range):
+                    return (1 - (cmf_range / 2.0)) * weight
+            return np.nan
+
+
+        def heuristic_cmf_neutrality(group, col_name, weight, min_required):
+            cmf_values = group[col_name].dropna()
+            if len(cmf_values) >= min_required:
+                distance_from_neutral = np.abs(cmf_values).mean()
+                score = 1 - (distance_from_neutral / 0.5)
+                score = max(min(score, 1), 0)
+                return score * weight
+            return np.nan
+
+
+        def heuristic_cmf_volatility_compression(group, col_name, weight, min_required):
+            cmf_values = group[col_name].dropna()
+            if len(cmf_values) >= min_required:
+                cmf_std = cmf_values.std()
+                score = 1 - (cmf_std / 0.4)
+                score = max(min(score, 1), 0)
+                return score * weight
+            return np.nan
+
+
+        def heuristic_cmf_extreme_avoidance(group, col_name, weight, min_required):
+            cmf_values = group[col_name].dropna()
+            if len(cmf_values) >= min_required:
+                extreme_bars = (np.abs(cmf_values) > 0.25).sum()
+                extreme_pct = extreme_bars / len(cmf_values)
+                score = 1 - extreme_pct
+                return score * weight
+            return np.nan
+        
+        
+        # Validation
+        assert abs(sum(heuristic_weights.values()) - 1.0) < 0.001, "Heuristic weights must sum to 1"
+        assert abs(sum(cmf_period_weights) - 1.0) < 0.001, "CMF period weights must sum to 1"
+        assert len(cmf_period_weights) == 3, "Must have exactly 3 CMF period weights"
+        
+        # Load data
+        df = download_raw_data.get_raw_df_from_sql(
+            table_name, 
+            fields=["cmf_3_isolated", "cmf_6_isolated", "cmf_12_isolated", "time_till_eod"]
+        )
+
+        
+        # Filter to specific time window
+        filtered_df = filter_regime_time_zone(
+            df, 
+            start_time_till_eod=start_time_till_eod, 
+            end_time_till_eod=end_time_till_eod
+        )
+        
+        
+        # Initialize results dataframe
+        daily_scores = pd.DataFrame(index=filtered_df.groupby('day').size().index)
+        
+        # For each CMF period (10, 20, 30)
+        for idx, (col_name, period_weight, min_req) in enumerate([
+            ('cmf_3_isolated', cmf_period_weights[0], 3),
+            ('cmf_6_isolated', cmf_period_weights[1], 6),
+            ('cmf_12_isolated', cmf_period_weights[2], 12)
+        ]):
+            
+            # Calculate each heuristic
+            h1_range = filtered_df.groupby('day').apply(
+                lambda g: heuristic_cmf_range_compression(g, col_name, 1.0, min_req)
+            )
+            
+            h2_neutrality = filtered_df.groupby('day').apply(
+                lambda g: heuristic_cmf_neutrality(g, col_name, 1.0, min_req)
+            )
+            
+            h3_vol = filtered_df.groupby('day').apply(
+                lambda g: heuristic_cmf_volatility_compression(g, col_name, 1.0, min_req)
+            )
+            
+            h4_extreme = filtered_df.groupby('day').apply(
+                lambda g: heuristic_cmf_extreme_avoidance(g, col_name, 1.0, min_req)
+            )
+            
+            # Combine heuristics with their weights
+            combined_heuristic = (
+                h1_range * heuristic_weights['range_compression'] +
+                h2_neutrality * heuristic_weights['neutrality'] +
+                h3_vol * heuristic_weights['volatility_compression'] +
+                h4_extreme * heuristic_weights['extreme_avoidance']
+            )
+            
+            # Apply CMF period weight
+            daily_scores[f'cmf_{idx}_combined'] = combined_heuristic * period_weight
+        
+        # Sum across CMF periods
+        daily_scores['final_cmf_heuristic'] = daily_scores[
+            ['cmf_0_combined', 'cmf_1_combined', 'cmf_2_combined']
+        ].sum(axis=1, skipna=True)
+        
+        # Handle all-NaN rows
+        daily_scores.loc[
+            daily_scores[['cmf_0_combined', 'cmf_1_combined', 'cmf_2_combined']].isna().all(axis=1),
+            'final_cmf_heuristic'
+        ] = np.nan
+        
+        # Calculate overall score
+        overall_score = np.nanmedian(daily_scores['final_cmf_heuristic'])
+        
+        print(overall_score)
+        
+        return overall_score
     
     
     
@@ -625,7 +747,7 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
         return heuristic_sticky_cmf_tas()
     else:
         
-        raise Exception("Invalid ta indicator; Must be 'rsi' or 'roc'")
+        raise Exception("Invalid ta indicator; Must be 'vwap' or 'cmf'")
  
     
 
@@ -638,7 +760,7 @@ def heuristic_sticky_tas(table_name: str) -> float:
 if __name__ == "__main__":
 
 
-    heuristic_sticky_volume_tas("spy_2025_5_minute_annual", ta_indicator="vwap", start_time_till_eod=60, end_time_till_eod=0)
+    heuristic_sticky_volume_tas("spy_2025_5_minute_annual", ta_indicator="cmf", start_time_till_eod=60, end_time_till_eod=0)
     
 
     
