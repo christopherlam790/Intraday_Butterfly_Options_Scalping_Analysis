@@ -751,6 +751,178 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
  
     
 
+def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_time_till_eod: int, end_time_till_eod:int) -> float:
+
+    def heuristic_sticky_atr_tas(
+    weights: list = [0.4, 0.4, 0.2],  # Compression, Stability, Contraction
+    atr_period_weights: list = [0.4, 0.6]  # atr_6 vs atr_12
+) -> float:
+            
+        def heuristic_atr_compression(group, col_name, weight, min_required=6,):
+            """
+            Measures ATR relative to price - lower ATR = higher score
+            Similar to your RSI range compression, but inverted logic
+            """
+            atr_values = group[col_name].dropna()
+            price_values = group["close"].dropna()
+            
+            if len(atr_values) >= min_required and len(price_values) > 0:
+                # Calculate ATR as % of price (normalized)
+                avg_price = price_values.mean()
+                avg_atr = atr_values.mean()
+                
+                if avg_price > 0 and pd.notna(avg_atr):
+                    # ATR as percentage of price
+                    atr_pct = (avg_atr / avg_price) * 100
+                    
+                    # Typical intraday ATR: 0.3% - 1.5% of price
+                    # Lower ATR% = higher score for butterflies
+                    # Normalize: 0.2% ATR = 1.0 score, 1.5% ATR = 0.0 score
+                    score = 1 - ((atr_pct - 0.2) / 1.3)  # Linear mapping
+                    score = max(min(score, 1.0), 0.0)  # Clamp 0-1
+                    
+                    return score * weight
+            return np.nan
+        
+        def heuristic_atr_stability(group, col_name, weight, min_required=6):
+            atr_values = group[col_name].dropna()
+            
+            if len(atr_values) >= min_required:
+                atr_std = atr_values.std()
+                atr_mean = atr_values.mean()
+                
+                if atr_mean > 0 and pd.notna(atr_std):
+                    # Coefficient of variation (CV) - normalized volatility
+                    cv = atr_std / atr_mean
+                    
+                    # Lower CV = more stable = better for butterflies
+                    # Typical CV: 0.1 - 0.5
+                    # CV < 0.15 = excellent, CV > 0.4 = poor
+                    score = 1 - (cv / 0.5)
+                    score = max(min(score, 1.0), 0.0)
+                    
+                    return score * weight
+            return np.nan
+        
+        def heuristic_atr_contraction(group, col_name, weight, min_required=6):
+            atr_values = group[col_name].dropna()
+            
+            if len(atr_values) >= min_required:
+                # Simple linear regression slope
+                x = np.arange(len(atr_values))
+                y = atr_values.values
+                
+                # Calculate slope
+                slope = np.polyfit(x, y, 1)[0]
+                
+                # Normalize slope by mean ATR
+                atr_mean = atr_values.mean()
+                if atr_mean > 0:
+                    normalized_slope = slope / atr_mean
+                    
+                    # Negative slope (decreasing ATR) = good
+                    # -0.05 or lower = excellent (1.0 score)
+                    # 0.0 = neutral (0.5 score)
+                    # +0.05 or higher = poor (0.0 score)
+                    if normalized_slope <= -0.05:
+                        score = 1.0
+                    elif normalized_slope >= 0.05:
+                        score = 0.0
+                    else:
+                        # Linear interpolation between -0.05 and 0.05
+                        score = 0.5 - (normalized_slope * 5)
+                    
+                    return score * weight
+            return np.nan
+        
+        
+        assert abs(sum(weights) - 1.0) < 0.001, "Heuristic weights must sum to 1"
+        assert abs(sum(atr_period_weights) - 1.0) < 0.001, "ATR period weights must sum to 1"
+        assert len(weights) == 3, "Must have exactly 3 heuristic weights"
+        assert len(atr_period_weights) == 2, "Must have exactly 2 ATR period weights"
+        
+        # Load data
+        df = download_raw_data.get_raw_df_from_sql(
+            table_name, 
+            fields=["atr_6_isolated", "atr_12_isolated", "close", "time_till_eod"]
+        )
+        
+        filtered_df = filter_regime_time_zone(
+            df, 
+            start_time_till_eod=start_time_till_eod, 
+            end_time_till_eod=end_time_till_eod
+        )
+        
+
+        
+        # Initialize results
+        daily_scores = pd.DataFrame(index=filtered_df.groupby('day').size().index)
+        
+        # Process each ATR period
+        for idx, (col_name, period_weight, min_req) in enumerate([
+            ('atr_6_isolated', atr_period_weights[0], 6),
+            ('atr_12_isolated', atr_period_weights[1], 12)
+        ]):
+            
+            # Calculate each heuristic
+            h1_compression = filtered_df.groupby('day').apply(
+                lambda g: heuristic_atr_compression(g, col_name, 1.0, min_req)
+            )
+            
+            h2_stability = filtered_df.groupby('day').apply(
+                lambda g: heuristic_atr_stability(g, col_name, 1.0, min_req)
+            )
+            
+            h3_contraction = filtered_df.groupby('day').apply(
+                lambda g: heuristic_atr_contraction(g, col_name, 1.0, min_req)
+            )
+            
+            # Combine heuristics with their weights
+            combined_heuristic = (
+                h1_compression * weights[0] +
+                h2_stability * weights[1] +
+                h3_contraction * weights[2]
+            )
+            
+            # Apply ATR period weight
+            daily_scores[f'atr_{idx}_combined'] = combined_heuristic * period_weight
+        
+        # Sum across ATR periods
+        daily_scores['final_atr_heuristic'] = daily_scores[
+            ['atr_0_combined', 'atr_1_combined']
+        ].sum(axis=1, skipna=True)
+        
+        # Handle all-NaN rows
+        daily_scores.loc[
+            daily_scores[['atr_0_combined', 'atr_1_combined']].isna().all(axis=1),
+            'final_atr_heuristic'
+        ] = np.nan
+        
+        # Calculate overall score
+        overall_score = np.nanmedian(daily_scores['final_atr_heuristic'])
+        
+        print(overall_score)
+        
+        return overall_score
+
+
+
+    def heuristic_sticky_bb_width_tas() -> float:
+ 
+        pass
+
+
+
+    if ta_indicator == "atr":
+        return heuristic_sticky_atr_tas()
+    elif ta_indicator == "bb_width":
+        return heuristic_sticky_bb_width_tas()
+    else:
+        
+        raise Exception("Invalid ta indicator; Must be 'vwap' or 'cmf'")
+ 
+
+
 
 def heuristic_sticky_tas(table_name: str) -> float:
     pass
@@ -760,7 +932,7 @@ def heuristic_sticky_tas(table_name: str) -> float:
 if __name__ == "__main__":
 
 
-    heuristic_sticky_volume_tas("spy_2025_5_minute_annual", ta_indicator="cmf", start_time_till_eod=60, end_time_till_eod=0)
+    heuristic_sticky_volatility_tas("spy_2025_5_minute_annual", ta_indicator="atr", start_time_till_eod=60, end_time_till_eod=0)
     
 
     
