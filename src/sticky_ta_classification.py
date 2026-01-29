@@ -379,10 +379,239 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
 
 
 def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_till_eod: int, end_time_till_eod:int) -> float:
+        
+    def heuristic_sticky_vwap_tas(
+        heuristic_weights: dict = {
+            'price_clustering': 0.30,      # How tight around VWAP
+            'range_compression': 0.25,     # Range of deviations
+            'slope_stability': 0.20,       # VWAP flatness
+            'crossover_frequency': 0.15,   # Healthy oscillation
+            'final_distance': 0.10         # Close to VWAP at end
+        },
+        vwap_period_weights = [0.2,0.3, 0.5]
+    ) -> float:
+
+        def heuristic_vwap_price_clustering(group, col_name, weight=1.0, min_required=12):
+            prices = group["close"].dropna()
+            vwap_values = group[col_name].dropna()
+            
+            # Ensure we have matching data
+            valid_idx = prices.index.intersection(vwap_values.index)
+            if len(valid_idx) < min_required:
+                return np.nan
+            
+            prices = prices.loc[valid_idx]
+            vwap_values = vwap_values.loc[valid_idx]
+            
+            # Calculate percentage deviation from VWAP
+            pct_deviation = np.abs((prices - vwap_values) / vwap_values) * 100
+            
+            # Average deviation
+            avg_deviation = pct_deviation.mean()
+            
+            # Convert to score: lower deviation = higher score
+            # Typical intraday deviation: 0.1% - 1.0%
+            # 0.1% deviation → score 0.90
+            # 0.5% deviation → score 0.50
+            # 1.0% deviation → score 0.00
+            score = max(1 - avg_deviation, 0)
+            
+            return score * weight
+
+
+        def heuristic_vwap_slope_stability(group, col_name, weight=1.0, min_required=12):
+            """
+            Measures VWAP slope - flatter = more stable anchor point
+            """
+            vwap_values = group[col_name].dropna()
+            
+            if len(vwap_values) < min_required:
+                return np.nan
+            
+            # Calculate slope using linear regression
+            x = np.arange(len(vwap_values))
+            y = vwap_values.values
+            
+            # Slope of best-fit line
+            slope = np.polyfit(x, y, 1)[0]
+            
+            # Normalize slope as percentage of mean VWAP
+            mean_vwap = y.mean()
+            slope_pct = abs(slope / mean_vwap) * 100 * len(vwap_values)  # Slope over window
+            
+            # Convert to score: lower slope = higher score
+            # Typical intraday VWAP slope: 0.05% - 0.5%
+            score = max(1 - (slope_pct / 0.5), 0)
+            
+            return score * weight
+        
+        def heuristic_vwap_range_compression(group, col_name, weight=1.0, min_required=12):
+            """
+            Measures the range of (price - VWAP) deviations
+            Tighter range = better mean reversion setup
+            """
+            prices = group["close"].dropna()
+            vwap_values = group[col_name].dropna()
+            
+            valid_idx = prices.index.intersection(vwap_values.index)
+            if len(valid_idx) < min_required:
+                return np.nan
+            
+            prices = prices.loc[valid_idx]
+            vwap_values = vwap_values.loc[valid_idx]
+            
+            # Calculate deviations
+            deviations = ((prices - vwap_values) / vwap_values) * 100
+            
+            # Range of deviations
+            dev_range = deviations.max() - deviations.min()
+            
+            # Convert to score: tighter range = higher score
+            # Typical range: 0.5% - 2.0%
+            # 0.5% range → score 0.75
+            # 1.0% range → score 0.50
+            # 2.0% range → score 0.00
+            score = max(1 - (dev_range / 2.0), 0)
+            
+            return score * weight
+        
+        def heuristic_vwap_crossover_frequency(group, col_name, weight=1.0, min_required=12):
+            """
+            Measures optimal number of VWAP crossovers
+            Too many = choppy, too few = trending away from VWAP
+            """
+            prices = group["close"].dropna()
+            vwap_values = group[col_name].dropna()
+            
+            valid_idx = prices.index.intersection(vwap_values.index)
+            if len(valid_idx) < min_required:
+                return np.nan
+            
+            prices = prices.loc[valid_idx]
+            vwap_values = vwap_values.loc[valid_idx]
+            
+            # Count crossovers
+            above_vwap = prices > vwap_values
+            crossovers = (above_vwap != above_vwap.shift(1)).sum()
+            
+            # Optimal: 2-4 crossovers in window (healthy oscillation)
+            if 2 <= crossovers <= 4:
+                score = 1.0
+            elif crossovers < 2:
+                score = 0.5  # Trending away from VWAP
+            else:
+                score = max(1 - ((crossovers - 4) * 0.1), 0)  # Too choppy
+            
+            return score * weight
+
+        
+        def heuristic_vwap_final_distance(group, col_name, weight=1.0, min_required=12):
+            """
+            Measures how close price is to VWAP at end of window
+            Closer = better setup for mean reversion butterfly
+            """
+            prices = group["close"].dropna()
+            vwap_values = group[col_name].dropna()
+            
+            valid_idx = prices.index.intersection(vwap_values.index)
+            if len(valid_idx) < min_required:
+                return np.nan
+            
+            # Get final values
+            final_price = prices.loc[valid_idx].iloc[-1]
+            final_vwap = vwap_values.loc[valid_idx].iloc[-1]
+            
+            # Calculate final deviation
+            final_deviation = abs((final_price - final_vwap) / final_vwap) * 100
+            
+            # Convert to score: closer = higher score
+            # Within 0.2% → score 0.90+
+            # Within 0.5% → score 0.50
+            # > 1.0% → score 0.00
+            score = max(1 - (final_deviation / 1.0), 0)
+            
+            return score * weight
+        
+        
+        assert abs(sum(heuristic_weights.values()) - 1.0) < 0.001, "Heuristic weights must sum to 1"
+        assert abs(sum(vwap_period_weights) - 1.0) < 0.001, "VWAP weight must sum to 1"
+        
+
+        # Load data
+        df = download_raw_data.get_raw_df_from_sql(
+            table_name, 
+            fields=["vwap_3_isolated", "vwap_6_isolated", "vwap_12_isolated", "time_till_eod", "close"]
+        )
+        
+        # Filter to specific time window
+        filtered_df = filter_regime_time_zone(
+            df, 
+            start_time_till_eod=start_time_till_eod, 
+            end_time_till_eod=end_time_till_eod
+        )
+        
+        # Initialize results
+        daily_scores = pd.DataFrame(index=filtered_df.groupby('day').size().index)
+        
+        # For each VWAP period (3, 6, 12)
+        for idx, (col_name, period_weight, min_req) in enumerate([
+            ('vwap_3_isolated', vwap_period_weights[0], 3),
+            ('vwap_6_isolated', vwap_period_weights[1], 6),
+            ('vwap_12_isolated', vwap_period_weights[2], 12)
+        ]):
+            
+            # Calculate each heuristic
+            h1_clustering = filtered_df.groupby('day').apply(
+                lambda g: heuristic_vwap_price_clustering(g, col_name, 1.0, min_req)
+            )
+            
+            h2_range = filtered_df.groupby('day').apply(
+                lambda g: heuristic_vwap_range_compression(g, col_name, 1.0, min_req)
+            )
+            
+            h3_slope = filtered_df.groupby('day').apply(
+                lambda g: heuristic_vwap_slope_stability(g, col_name, 1.0, min_req)
+            )
+            
+            h4_crossover = filtered_df.groupby('day').apply(
+                lambda g: heuristic_vwap_crossover_frequency(g, col_name, 1.0, min_req)
+            )
+            
+            h5_final_dist = filtered_df.groupby('day').apply(
+                lambda g: heuristic_vwap_final_distance(g, col_name, 1.0, min_req)
+            )
+            
+            # Combine with weights
+            combined_heuristic = (
+                h1_clustering * heuristic_weights['price_clustering'] +
+                h2_range * heuristic_weights['range_compression'] +
+                h3_slope * heuristic_weights['slope_stability'] +
+                h4_crossover * heuristic_weights['crossover_frequency'] +
+                h5_final_dist * heuristic_weights['final_distance']
+            )
+            
+            # Apply VWAP period weight
+            daily_scores[f'vwap_{idx}_combined'] = combined_heuristic * period_weight
+            
     
-    def heuristic_sticky_vwap_tas():
     
-        pass
+        # Sum across RSI periods
+        daily_scores['final_vwap_heuristic'] = daily_scores[
+            ['vwap_0_combined', 'vwap_1_combined', 'vwap_2_combined']
+        ].sum(axis=1, skipna=True)
+        
+        # Handle all-NaN rows
+        daily_scores.loc[
+            daily_scores[['vwap_0_combined', 'vwap_1_combined', 'vwap_2_combined']].isna().all(axis=1),
+            'final_vwap_heuristic'
+        ] = np.nan
+        
+        overall_score = np.nanmedian(daily_scores['final_vwap_heuristic'])
+        
+        print(overall_score)
+        
+         
+        return overall_score
     
     
     def heuristic_sticky_cmf_tas():
@@ -409,7 +638,7 @@ def heuristic_sticky_tas(table_name: str) -> float:
 if __name__ == "__main__":
 
 
-    heuristic_sticky_momentum_tas("spy_2025_5_minute_annual", ta_indicator="roc", start_time_till_eod=60, end_time_till_eod=0)
+    heuristic_sticky_volume_tas("spy_2025_5_minute_annual", ta_indicator="vwap", start_time_till_eod=60, end_time_till_eod=0)
     
 
     
