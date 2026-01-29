@@ -73,13 +73,6 @@ Adds volume based indicators (VWAP, CMF) to df
 
 """
 def add_volume_indicator(df: pd.DataFrame) -> pd.DataFrame:
-    
-    # Rolling Windows
-
-        #CMF (Custom)
-    df['cmf_6_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=6) #30 min
-    df['cmf_12_rolling'] = ta.volume.chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], window=12) #60 min
-    
 
     # Isolated Windows
     assert df.index.tz is not None
@@ -108,12 +101,6 @@ Adds volatility based indicators (ATR, BB width) to df
 @returns pd.DataFrame
 """
 def add_volatility_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    
-    #Rolling Windows
-
-        #ATR (Custom)
-    df['atr_6_rolling'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=6) #30 min
-    df['atr_12_rolling'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=12) #60 min
 
 
     # Isolated Windows
@@ -121,10 +108,17 @@ def add_volatility_indicators(df: pd.DataFrame) -> pd.DataFrame:
     assert df.index.tz is not None
     df["trade_date"] = df.index.date
     
+    df['atr_6_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volatility.average_true_range(x['high'], x['low'], x['close'], window=6)) #30 min
+    df['atr_12_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volatility.average_true_range(x['high'], x['low'], x['close'], window=12)) #60 min
+    
+    
         #BB (Custom)
     df['bb_width_3_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volatility.bollinger_wband(x['close'], window=3)) #15 min
     df['bb_width_6_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volatility.bollinger_wband(x['close'], window=6)) #30 min
     df['bb_width_12_isolated'] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.volatility.bollinger_wband(x['close'], window=12)) #60 min
+   
+   
+   
     
     df.drop(columns=["trade_date"], inplace=True)
     
