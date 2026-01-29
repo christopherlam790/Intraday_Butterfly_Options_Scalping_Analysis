@@ -136,17 +136,14 @@ def add_trend_indicators(df: pd.DataFrame) -> pd.DataFrame:
     
     # Rolling Windows
 
-        # ADX (Custom)
-    df["adx_6_rolling"] = ta.trend.adx(df['high'], df['low'], df['close'], window=6) #30 min
-    df["adx_12_rolling"] = ta.trend.adx(df['high'], df['low'], df['close'], window=12) #60 min
 
-        #EMAs (Custom)
-    df["ema_6_rolling"] = ta.trend.ema_indicator(df['close'], window=6) #30 min
-    df["ema_12_rolling"] = ta.trend.ema_indicator(df['close'], window=12) #60 min
-    
     # Isolated Windows
     assert df.index.tz is not None
     df["trade_date"] = df.index.date
+
+        # ADX (Custom)
+    df["adx_6_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.trend.adx(x['high'], x['low'], x['close'], window=6)) #30 min
+    df["adx_12_isolated"] = df.groupby("trade_date", group_keys=False).apply(lambda x: ta.trend.adx(x['high'], x['low'], x['close'], window=12)) #60 min
     
         #EMAs (Custom)
     df['ema_3_isolated'] = df.groupby("trade_date", group_keys=False)["close"].apply(lambda x: ta.trend.ema_indicator(x, window=3)) #15 min
