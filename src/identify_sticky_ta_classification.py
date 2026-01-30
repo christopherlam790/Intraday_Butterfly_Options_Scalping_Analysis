@@ -1024,12 +1024,89 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
         return heuristic_sticky_bb_width_tas()
     else:
         
-        raise Exception("Invalid ta indicator; Must be 'vwap' or 'cmf'")
+        raise Exception("Invalid ta indicator; Must be 'atr' or 'bb_width'")
+ 
+
+def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_till_eod: int, end_time_till_eod:int) -> float:
+        
+    def heuristic_sticky_adx_tas(weights: list = [0.4, 0.6]) -> float:
+        """
+        ADX heuristic targeting optimal range (15-25) for butterflies
+        """
+        
+        assert abs(sum(weights) - 1.0) < 0.001, "Weights must sum to 1"
+        assert len(weights) == 2, "Must have exactly 2 weights"
+        
+        df = download_raw_data.get_raw_df_from_sql(
+            table_name, 
+            fields=["adx_6_isolated", "adx_12_isolated", "time_till_eod"]
+        )
+        
+        filtered_df = filter_regime_time_zone(
+            df, 
+            start_time_till_eod=start_time_till_eod, 
+            end_time_till_eod=end_time_till_eod
+        )
+        
+        
+        def optimal_adx_score(x, min_len):
+            """Score ADX: peak at 15-25 range"""
+            x_clean = x.dropna()
+            if len(x_clean) < min_len:
+                return np.nan
+            
+            adx_mean = x_clean.mean()
+            
+            # Optimal zone: 15-25
+            if 15 <= adx_mean <= 25:
+                return 1.0
+            elif adx_mean < 15:
+                return adx_mean / 15  # Penalize choppy markets
+            else:
+                return max(0, 1 - ((adx_mean - 25) / 25))  # Penalize trends
+        
+        daily_scores = filtered_df.groupby('day').agg({
+            'adx_6_isolated': lambda x: optimal_adx_score(x, 6) * weights[0],
+            'adx_12_isolated': lambda x: optimal_adx_score(x, 12) * weights[1]
+        }).rename(columns={
+            'adx_6_isolated': 'adx_6_heuristic',
+            'adx_12_isolated': 'adx_12_heuristic'
+        })
+        
+        daily_scores['general_adx_heuristic'] = daily_scores[
+            ['adx_6_heuristic', 'adx_12_heuristic']
+        ].sum(axis=1, skipna=True)
+        
+        daily_scores.loc[
+            daily_scores[['adx_6_heuristic', 'adx_12_heuristic']].isna().all(axis=1),
+            'general_adx_heuristic'
+        ] = np.nan
+        
+        overall_score = np.nanmedian(daily_scores['general_adx_heuristic'])
+        
+        print(overall_score)
+
+        return overall_score
+    
+    
+    
+    def heuristic_sticky_ema_tas():
+        pass
+    
+    
+    
+    if ta_indicator == "adx":
+        return heuristic_sticky_adx_tas()
+    elif ta_indicator == "ema":
+        return heuristic_sticky_ema_tas()
+    else:
+        
+        raise Exception("Invalid ta indicator; Must be 'adx' or 'ema'")
  
 
 
 
-def heuristic_sticky_tas(table_name: str) -> float:
+def heuristic_sticky_tas(table_name: str, ta_indicator:str, start_time_till_eod:int, end_time_till_eod:int) -> float:
     pass
 
 
@@ -1037,7 +1114,7 @@ def heuristic_sticky_tas(table_name: str) -> float:
 if __name__ == "__main__":
 
 
-    heuristic_sticky_volatility_tas("spy_2025_5_minute_annual", ta_indicator="bb_width", start_time_till_eod=60, end_time_till_eod=0)
+    heuristic_sticky_trend_tas("spy_2025_5_minute_annual", ta_indicator="adx", start_time_till_eod=60, end_time_till_eod=0)
     
 
     
