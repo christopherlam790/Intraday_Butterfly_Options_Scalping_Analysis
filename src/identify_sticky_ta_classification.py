@@ -1089,9 +1089,221 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
         return overall_score
     
     
-    
-    def heuristic_sticky_ema_tas():
-        pass
+        
+    def heuristic_sticky_ema_tas(
+        heuristic_weights: dict = {
+            'oscillation_stability': 0.4,        # How close EMA_3 and EMA_6 are
+            'cross_frequency': 0.2,    # Optimal crossing pattern
+            'slope_stability': 0.2,    # Flat EMAs = good
+            'range_compression': 0.2   # Tight EMA range = good
+        },
+        ema_period_weights: list = [0.4, 0.6]  # [EMA_3 weight, EMA_6 weight]
+    ) -> float:
+
+        def heuristic_ema_oscillation_stability(group, weight, min_required=12):
+            """
+            Measures stability of the EMA_3-EMA_6 spread
+            Stable spread = consolidation, volatile spread = trending/choppy
+            """
+            ema_3 = group['ema_3_isolated'].dropna()
+            ema_6 = group['ema_6_isolated'].dropna()
+            
+            if len(ema_3) >= min_required and len(ema_6) >= min_required:
+                valid_idx = ema_3.index.intersection(ema_6.index)
+                if len(valid_idx) < min_required:
+                    return np.nan
+                
+                ema_3_valid = ema_3.loc[valid_idx]
+                ema_6_valid = ema_6.loc[valid_idx]
+                
+                # Calculate the spread between EMAs
+                spread = ema_3_valid - ema_6_valid
+                
+                # Normalize by price level
+                price_level = ema_6_valid.mean()
+                if price_level == 0:
+                    return np.nan
+                
+                spread_pct = (spread / price_level) * 100
+                
+                # Measure volatility of the spread (not absolute value)
+                # Low spread volatility = consolidation
+                # High spread volatility = trending or whipsaw
+                spread_std = spread_pct.std()
+                
+                # Based on your data, spread std ranges ~0.01-0.05%
+                max_spread_std = 0.05
+                
+                score = 1 - min(spread_std / max_spread_std, 1.0)
+                
+                return score * weight
+            
+            return np.nan
+
+        def heuristic_ema_cross_frequency(group, weight, min_required=6):
+            """
+            Measures crossing frequency between EMA_3 and EMA_6
+            CALIBRATED: Your median is 4, mode is 3-4
+            """
+            ema_3 = group['ema_3_isolated'].dropna()
+            ema_6 = group['ema_6_isolated'].dropna()
+            
+            if len(ema_3) >= min_required and len(ema_6) >= min_required:
+                valid_idx = ema_3.index.intersection(ema_6.index)
+                if len(valid_idx) < min_required:
+                    return np.nan
+                
+                ema_3_valid = ema_3.loc[valid_idx]
+                ema_6_valid = ema_6.loc[valid_idx]
+                
+                above = ema_3_valid > ema_6_valid
+                crosses = (above != above.shift(1)).sum()
+                
+                # CALIBRATED: Based on your distribution
+                # 3-5 crosses is most common (consolidation with healthy oscillation)
+                # 1-2 = trending (not ideal)
+                # 6+ = choppy (not ideal)
+                if 3 <= crosses <= 5:
+                    score = 1.0  # Optimal range
+                elif 2 <= crosses <= 6:
+                    score = 0.85  # Good range
+                elif crosses == 1 or crosses == 7:
+                    score = 0.6  # Marginal
+                else:
+                    # 0 crosses = strong trend, 8+ = whipsaw
+                    score = max(0.4 - (abs(crosses - 4) * 0.05), 0)
+                
+                return score * weight
+            
+            return np.nan
+
+
+        def heuristic_ema_slope_stability(group, weight, min_required=6):
+            """
+            Measures EMA slope - flatter = better for butterflies
+            CALIBRATED to your data
+            """
+            ema_6 = group['ema_6_isolated'].dropna()
+            
+            if len(ema_6) >= min_required:
+                price_level = ema_6.mean()
+                if price_level == 0:
+                    return np.nan
+                
+                slope = ema_6.diff().abs()
+                avg_slope_pct = (slope.mean() / price_level) * 100
+                
+                # CALIBRATED: Your 95th percentile is 0.1161%
+                max_slope = 0.12  # Based on your data
+                
+                score = 1 - min(avg_slope_pct / max_slope, 1.0)
+                return score * weight
+            
+            return np.nan
+
+
+        def heuristic_ema_range_compression(group, ema_col, weight, min_required=6):
+            """
+            Measures range of a single EMA over the period
+            CALIBRATED to your data
+            """
+            ema_values = group[ema_col].dropna()
+            
+            if len(ema_values) >= min_required:
+                ema_range = ema_values.max() - ema_values.min()
+                price_level = ema_values.mean()
+                
+                if price_level == 0:
+                    return np.nan
+                
+                range_pct = (ema_range / price_level) * 100
+                
+                # CALIBRATED: Your 95th percentile is ~1.0% for both EMA_3 and EMA_6
+                max_range = 1.0  # Based on your data
+                
+                score = 1 - min(range_pct / max_range, 1.0)
+                return score * weight
+            
+            return np.nan
+        
+        
+        
+        
+        assert abs(sum(heuristic_weights.values()) - 1.0) < 0.001, "Heuristic weights must sum to 1"
+        assert abs(sum(ema_period_weights) - 1.0) < 0.001, "EMA period weights must sum to 1"
+        
+        # Load data
+        df = download_raw_data.get_raw_df_from_sql(
+            table_name, 
+            fields=["ema_3_isolated", "ema_6_isolated", "time_till_eod"]
+        )
+        
+        # Filter to your time window
+        filtered_df = filter_regime_time_zone(
+            df, 
+            start_time_till_eod=start_time_till_eod, 
+            end_time_till_eod=end_time_till_eod
+        )
+
+        # Initialize results
+        daily_scores = pd.DataFrame(index=filtered_df.groupby('day').size().index)
+        
+        # NEW: Oscillation stability (better than convergence)
+        h1_oscillation = filtered_df.groupby('day').apply(
+            lambda g: heuristic_ema_oscillation_stability(g, weight=1.0, min_required=12),
+            include_groups=False
+        )
+        
+        # Heuristic 2: Cross frequency (uses both EMAs together)
+        h2_crosses = filtered_df.groupby('day').apply(
+            lambda g: heuristic_ema_cross_frequency(g, weight=1.0, min_required=6)
+        )
+        
+
+        h3_slope = filtered_df.groupby('day').apply(
+            lambda g: heuristic_ema_slope_stability(g, weight=1.0, min_required=6),
+            include_groups=False
+        )
+        # Apply maturity penalty based on number of bars in window
+        num_bars = filtered_df.groupby('day').size()
+        maturity_factors = num_bars.apply(
+            lambda n: 0.6 if n < 12 else (0.8 if n < 24 else (0.9 if n < 36 else 1.0))
+        )
+        h3_slope = h3_slope * maturity_factors
+
+        
+        # Heuristic 4: Range compression for each EMA
+        h4_ema3_range = filtered_df.groupby('day').apply(
+            lambda g: heuristic_ema_range_compression(g, 'ema_3_isolated', weight=1.0, min_required=3)
+        )
+        
+        h4_ema6_range = filtered_df.groupby('day').apply(
+            lambda g: heuristic_ema_range_compression(g, 'ema_6_isolated', weight=1.0, min_required=6)
+        )
+        
+        # Combine range compression scores with EMA period weights
+        h4_combined_range = (
+            h4_ema3_range * ema_period_weights[0] + 
+            h4_ema6_range * ema_period_weights[1]
+        )
+        
+        # Apply heuristic weights and combine
+        daily_scores['ema_heuristic'] = (
+            h1_oscillation * heuristic_weights['oscillation_stability'] +
+            h2_crosses * heuristic_weights['cross_frequency'] +
+            h3_slope * heuristic_weights['slope_stability'] +
+            h4_combined_range * heuristic_weights['range_compression']
+        )
+        
+        # Handle all-NaN days
+        daily_scores.loc[daily_scores['ema_heuristic'].isna(), 'ema_heuristic'] = np.nan
+        
+        # Calculate overall score
+        overall_score = np.nanmedian(daily_scores['ema_heuristic'])
+
+        print(overall_score)        
+
+        return overall_score
     
     
     
@@ -1114,8 +1326,10 @@ def heuristic_sticky_tas(table_name: str, ta_indicator:str, start_time_till_eod:
 if __name__ == "__main__":
 
 
-    heuristic_sticky_trend_tas("spy_2025_5_minute_annual", ta_indicator="adx", start_time_till_eod=60, end_time_till_eod=0)
+    heuristic_sticky_trend_tas("spy_2025_5_minute_annual", ta_indicator="ema", start_time_till_eod=60, end_time_till_eod=0)
     
+
+
 
     
     pass
