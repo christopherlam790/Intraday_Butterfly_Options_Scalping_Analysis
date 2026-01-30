@@ -608,8 +608,7 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
         
         overall_score = np.nanmedian(daily_scores['final_vwap_heuristic'])
         
-        print(overall_score)
-        
+         
          
         return overall_score
     
@@ -735,7 +734,6 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
         # Calculate overall score
         overall_score = np.nanmedian(daily_scores['final_cmf_heuristic'])
         
-        print(overall_score)
         
         return overall_score
     
@@ -901,7 +899,6 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
         # Calculate overall score
         overall_score = np.nanmedian(daily_scores['final_atr_heuristic'])
         
-        print(overall_score)
         
         return overall_score
 
@@ -1008,12 +1005,6 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
         # Calculate overall score
         overall_score = np.nanmedian(daily_scores['general_bb_width_heuristic'])
         
-        # Diagnostics
-        valid_days = daily_scores['general_bb_width_heuristic'].notna().sum()
-        total_days = len(daily_scores)
-        
-        print(overall_score)
-
         return overall_score
 
 
@@ -1084,7 +1075,6 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
         
         overall_score = np.nanmedian(daily_scores['general_adx_heuristic'])
         
-        print(overall_score)
 
         return overall_score
     
@@ -1301,7 +1291,6 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
         # Calculate overall score
         overall_score = np.nanmedian(daily_scores['ema_heuristic'])
 
-        print(overall_score)        
 
         return overall_score
     
@@ -1317,19 +1306,86 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
  
 
 
+def general_heuristic_sticky_tas(table_name: str, ta_indicator:str, start_time_till_eod:int, end_time_till_eod:int) -> float:
+    
+    if ta_indicator in ["rsi", "roc"]:
+        return heuristic_sticky_momentum_tas(table_name=table_name, ta_indicator=ta_indicator, start_time_till_eod=start_time_till_eod, end_time_till_eod=end_time_till_eod)
+    elif ta_indicator in ["vwap", "cmf"]:
+        return heuristic_sticky_volume_tas(table_name=table_name, ta_indicator=ta_indicator, start_time_till_eod=start_time_till_eod, end_time_till_eod=end_time_till_eod)
+    elif ta_indicator in ["atr", "bb_width"]:
+        return heuristic_sticky_volatility_tas(table_name=table_name, ta_indicator=ta_indicator, start_time_till_eod=start_time_till_eod, end_time_till_eod=end_time_till_eod)
+    elif ta_indicator in ["adx","ema"]:
+        return heuristic_sticky_trend_tas(table_name=table_name, ta_indicator=ta_indicator, start_time_till_eod=start_time_till_eod, end_time_till_eod=end_time_till_eod)
+    else:
+        raise Exception("Invalid ta indicator")
 
-def heuristic_sticky_tas(table_name: str, ta_indicator:str, start_time_till_eod:int, end_time_till_eod:int) -> float:
     pass
 
 
 
+def get_all_ta_info_by_session(table_name:str,
+                               indicators: list = ["rsi", "roc", "vwap", "cmf", "atr", "bb_width", "adx", "ema"],
+                               sessions: dict = {"overall": (390,0),
+                                                 "open": (390, 330),
+                                                 "post_open": (330,270),
+                                                 "lunch": (270,150),
+                                                 "afternoon": (150,60),
+                                                 "close": (60,0)}) -> pd.DataFrame:
+    
+    
+
+    # initialize empty frame with correct shape
+    df = pd.DataFrame(index=sessions.keys(), columns=indicators, dtype=float)
+
+    for session_name, (start_min, end_min) in sessions.items():
+        for indicator in indicators:
+            df.loc[session_name, indicator] = general_heuristic_sticky_tas(
+                table_name=table_name,
+                ta_indicator=indicator,
+                start_time_till_eod=start_min,
+                end_time_till_eod=end_min,
+            )
+
+    df["mean_heuristic_sscore"] = df.mean(axis=1, skipna=True)
+
+
+    return df
+
 if __name__ == "__main__":
 
 
-    heuristic_sticky_trend_tas("spy_2025_5_minute_annual", ta_indicator="ema", start_time_till_eod=60, end_time_till_eod=0)
+
+    scores = get_all_ta_info_by_session(table_name="spy_2025_5_minute_annual", sessions={"overall": (390,0),
+                                                 "open": (390, 330),
+                                                 "post_open": (330,270),
+                                                 "lunch": (270,150),
+                                                 "afternoon": (150,60),
+                                                 "close": (60,0),
+                                                 
+                                                 "09_30_to_10_00": (390, 360),
+                                                 
+                                                 "10_00_to_10_30": (360, 330), 
+                                                 "10_30_to_11_00": (330, 300), 
+                                                 
+                                                 "11_00_to_11_30": (300, 270),
+                                                 "11_30_to_12_00": (270, 240),
+                                                 
+                                                 "12_00_to_12_30": (240, 210),
+                                                 "12_30_to_13_00": (210, 180),
+                                                 
+                                                 "13_00_to_13_30": (180, 150),
+                                                 "13_30_to_14_00": (150, 120),
+                                                 
+                                                 "14_00_to_14_30": (120, 90),
+                                                 "14_30_to_15_00": (90, 60), 
+                                                
+                                                 "15_00_to_15_30": (60, 30),
+                                                 "15_30_to_16_00": (30, 0),
     
-
-
+                                                                                    
+                                                 })
+    
+    print(scores)
 
     
     pass
