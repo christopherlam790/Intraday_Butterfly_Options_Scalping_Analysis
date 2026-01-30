@@ -907,9 +907,114 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
 
 
 
-    def heuristic_sticky_bb_width_tas() -> float:
- 
-        pass
+    def heuristic_sticky_bb_width_tas(
+        weights: list = [0.2, 0.3, 0.5],
+    ) -> float:
+
+        
+        assert abs(sum(weights) - 1.0) < 0.001, "Weights must sum to 1"
+        assert len(weights) == 3, "Must have exactly 3 weights"
+        
+        # Fetch data
+        df = download_raw_data.get_raw_df_from_sql(
+            table_name, 
+            fields=["bb_width_3_isolated", "bb_width_6_isolated", "bb_width_12_isolated", "time_till_eod"]
+        )
+        
+        filtered_df = filter_regime_time_zone(
+            df, 
+            start_time_till_eod=start_time_till_eod, 
+            end_time_till_eod=end_time_till_eod
+        )
+
+        # Calculate normalization parameters based on method
+        # Use percentile rank normalization (more robust)
+        normalization_params = {}
+        for col in ['bb_width_3_isolated', 'bb_width_6_isolated', 'bb_width_12_isolated']:
+            normalization_params[col] = {
+                'method': 'percentile',
+                'data': filtered_df[col].dropna()
+            }
+
+        
+        # Helper function to calculate heuristic with validation
+        def calculate_bb_heuristic_with_validation(group, col_name, weight, min_required, norm_params):
+            """
+            Calculate BB width heuristic for one period
+            
+            Lower BB width = Higher score (better for butterflies)
+            """
+            bb_values = group[col_name].dropna()
+            
+            # Require minimum number of valid observations
+            if len(bb_values) >= min_required:
+                # Calculate mean BB width for this day
+                mean_bb_width = bb_values.mean()
+                
+                if pd.notna(mean_bb_width):
+                    # Normalize based on method
+                    if norm_params['method'] == 'percentile':
+                        # Calculate percentile rank (0-1)
+                        # Lower percentile = narrower width = higher score
+                        percentile_rank = (norm_params['data'] < mean_bb_width).sum() / len(norm_params['data'])
+                        normalized_width = percentile_rank
+                    else:  # historical_max
+                        # Normalize by historical max
+                        normalized_width = mean_bb_width / norm_params['max_value']
+                        normalized_width = min(normalized_width, 1.0)  # Cap at 1.0
+                    
+                    # Convert to score: narrow width = high score
+                    score = 1 - normalized_width
+                    return score * weight
+            
+            return np.nan
+        
+        # Initialize results dataframe
+        daily_scores = pd.DataFrame(index=filtered_df.groupby('day').size().index)
+        
+        # Calculate heuristic for each BB width period
+        daily_scores['bb_width_3_heuristic'] = filtered_df.groupby('day').apply(
+            lambda g: calculate_bb_heuristic_with_validation(
+                g, 'bb_width_3_isolated', weights[0], min_required=3, 
+                norm_params=normalization_params['bb_width_3_isolated']
+            )
+        ).values
+        
+        daily_scores['bb_width_6_heuristic'] = filtered_df.groupby('day').apply(
+            lambda g: calculate_bb_heuristic_with_validation(
+                g, 'bb_width_6_isolated', weights[1], min_required=6,
+                norm_params=normalization_params['bb_width_6_isolated']
+            )
+        ).values
+        
+        daily_scores['bb_width_12_heuristic'] = filtered_df.groupby('day').apply(
+            lambda g: calculate_bb_heuristic_with_validation(
+                g, 'bb_width_12_isolated', weights[2], min_required=12,
+                norm_params=normalization_params['bb_width_12_isolated']
+            )
+        ).values
+        
+        # Combine weighted scores
+        daily_scores['general_bb_width_heuristic'] = daily_scores[
+            ['bb_width_3_heuristic', 'bb_width_6_heuristic', 'bb_width_12_heuristic']
+        ].sum(axis=1, skipna=True)
+        
+        # Handle all-NaN rows
+        daily_scores.loc[
+            daily_scores[['bb_width_3_heuristic', 'bb_width_6_heuristic', 'bb_width_12_heuristic']].isna().all(axis=1),
+            'general_bb_width_heuristic'
+        ] = np.nan
+        
+        # Calculate overall score
+        overall_score = np.nanmedian(daily_scores['general_bb_width_heuristic'])
+        
+        # Diagnostics
+        valid_days = daily_scores['general_bb_width_heuristic'].notna().sum()
+        total_days = len(daily_scores)
+        
+        print(overall_score)
+
+        return overall_score
 
 
 
@@ -932,7 +1037,7 @@ def heuristic_sticky_tas(table_name: str) -> float:
 if __name__ == "__main__":
 
 
-    heuristic_sticky_volatility_tas("spy_2025_5_minute_annual", ta_indicator="atr", start_time_till_eod=60, end_time_till_eod=0)
+    heuristic_sticky_volatility_tas("spy_2025_5_minute_annual", ta_indicator="bb_width", start_time_till_eod=60, end_time_till_eod=0)
     
 
     
