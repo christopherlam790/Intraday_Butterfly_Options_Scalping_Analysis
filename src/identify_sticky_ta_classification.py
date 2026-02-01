@@ -377,9 +377,24 @@ def heuristic_sticky_momentum_tas(table_name: str, ta_indicator: str, start_time
         raise Exception("Invalid ta indicator; Must be 'rsi' or 'roc'")
 
 
+"""
+General heuristc func for volume ta indicators (vwap & cmf) - returns heuristic score of requested volume indicator
+@param table_name: str - Name of table
+@param ta_indicator: str - Momentum indicator to get heuristic on ('rsi' or 'roc')
+@param start_time_till_eod: int - Start time in minutes until end of day
+@param end_time_till_eof: int - End time in minutes until end of day
+@returns: pd.DataFrame
 
+"""
 def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_till_eod: int, end_time_till_eod:int) -> float:
-        
+       
+       
+    """
+    General heuristic for vwap - Returns overal vwap score
+    @param heuristic_weights: dict - dict of weights for heuristic
+    @param vwap_period_weights: list - list of weights for periods
+    @returns: float - overall vwap heuristic score
+    """ 
     def heuristic_sticky_vwap_tas(
         heuristic_weights: dict = {
             'price_clustering': 0.30,      # How tight around VWAP
@@ -391,7 +406,17 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
         vwap_period_weights = [0.2,0.3, 0.5]
     ) -> float:
 
-        def heuristic_vwap_price_clustering(group, col_name, weight=1.0, min_required=12):
+
+        """
+        Heuristic for price clustering of vwap
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
+        def heuristic_vwap_price_clustering(group, col_name, weight=1.0, min_required=12) -> float:
             prices = group["close"].dropna()
             vwap_values = group[col_name].dropna()
             
@@ -409,20 +434,22 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
             # Average deviation
             avg_deviation = pct_deviation.mean()
             
-            # Convert to score: lower deviation = higher score
-            # Typical intraday deviation: 0.1% - 1.0%
-            # 0.1% deviation → score 0.90
-            # 0.5% deviation → score 0.50
-            # 1.0% deviation → score 0.00
             score = max(1 - avg_deviation, 0)
             
             return score * weight
 
 
+        """
+        Heuristic for slope stability of vwap
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
         def heuristic_vwap_slope_stability(group, col_name, weight=1.0, min_required=12):
-            """
-            Measures VWAP slope - flatter = more stable anchor point
-            """
+
             vwap_values = group[col_name].dropna()
             
             if len(vwap_values) < min_required:
@@ -444,7 +471,17 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
             score = max(1 - (slope_pct / 0.5), 0)
             
             return score * weight
-        
+       
+       
+        """
+        Heuristic for range compression of vwap
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """ 
         def heuristic_vwap_range_compression(group, col_name, weight=1.0, min_required=12):
             """
             Measures the range of (price - VWAP) deviations
@@ -466,15 +503,21 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
             # Range of deviations
             dev_range = deviations.max() - deviations.min()
             
-            # Convert to score: tighter range = higher score
-            # Typical range: 0.5% - 2.0%
-            # 0.5% range → score 0.75
-            # 1.0% range → score 0.50
-            # 2.0% range → score 0.00
+
             score = max(1 - (dev_range / 2.0), 0)
             
             return score * weight
         
+        
+        """
+        Heuristic for crossover frequency of vwap
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """        
         def heuristic_vwap_crossover_frequency(group, col_name, weight=1.0, min_required=12):
             """
             Measures optimal number of VWAP crossovers
@@ -504,7 +547,16 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
             
             return score * weight
 
-        
+     
+        """
+        Heuristic for final distance of vwap
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """        
         def heuristic_vwap_final_distance(group, col_name, weight=1.0, min_required=12):
             """
             Measures how close price is to VWAP at end of window
@@ -612,7 +664,14 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
          
         return overall_score
     
-        
+       
+       
+    """
+    General heuristic for cmf - Returns overal cmf score
+    @param heuristic_weights: dict - dict of weights for heuristic
+    @param cmf_period_weights: list - list of weights for periods
+    @returns: float - overall cmf heuristic score
+    """         
     def heuristic_sticky_cmf_tas(
         heuristic_weights: dict = {
             'range_compression': 0.35,      # CMF range stability
@@ -622,7 +681,18 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
         },
         cmf_period_weights: list = [0.2,0.3, 0.5],  # Weights for CMF_6_rolling, CMF_12_rolling, CMF_3/6/12_iso
     ) -> float:
+            
+            
+            
+        """
+        Heuristic for range compressions of cmf
                 
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """                
         def heuristic_cmf_range_compression(group, col_name, weight, min_required):
             cmf_values = group[col_name].dropna()
             if len(cmf_values) >= min_required:
@@ -632,6 +702,15 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
             return np.nan
 
 
+        """
+        Heuristic for neutrality of cmf
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
         def heuristic_cmf_neutrality(group, col_name, weight, min_required):
             cmf_values = group[col_name].dropna()
             if len(cmf_values) >= min_required:
@@ -641,7 +720,15 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
                 return score * weight
             return np.nan
 
-
+        """
+        Heuristic for volatility compression of cmf
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
         def heuristic_cmf_volatility_compression(group, col_name, weight, min_required):
             cmf_values = group[col_name].dropna()
             if len(cmf_values) >= min_required:
@@ -652,6 +739,15 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
             return np.nan
 
 
+        """
+        Heuristic for extreme avoidence of cmf
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
         def heuristic_cmf_extreme_avoidance(group, col_name, weight, min_required):
             cmf_values = group[col_name].dropna()
             if len(cmf_values) >= min_required:
@@ -748,19 +844,41 @@ def heuristic_sticky_volume_tas(table_name: str, ta_indicator:str, start_time_ti
         raise Exception("Invalid ta indicator; Must be 'vwap' or 'cmf'")
  
     
+"""
+General heuristc func for volatility ta indicators (atr & bb_width) - returns heuristic score of requested volatility indicator
+@param table_name: str - Name of table
+@param ta_indicator: str - Momentum indicator to get heuristic on ('rsi' or 'roc')
+@param start_time_till_eod: int - Start time in minutes until end of day
+@param end_time_till_eof: int - End time in minutes until end of day
+@returns: pd.DataFrame
 
+"""
 def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_time_till_eod: int, end_time_till_eod:int) -> float:
 
+
+    """
+    General heuristic for atr - Returns overal atr score
+    @param heuristic_weights: dict - dict of weights for heuristic
+    @param atr_period_weights: list - list of weights for periods
+    @returns: float - overall atr heuristic score
+    """   
     def heuristic_sticky_atr_tas(
     weights: list = [0.4, 0.4, 0.2],  # Compression, Stability, Contraction
     atr_period_weights: list = [0.4, 0.6]  # atr_6 vs atr_12
 ) -> float:
-            
+
+
+        """
+        Heuristic for compression of atr
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """            
         def heuristic_atr_compression(group, col_name, weight, min_required=6,):
-            """
-            Measures ATR relative to price - lower ATR = higher score
-            Similar to your RSI range compression, but inverted logic
-            """
+
             atr_values = group[col_name].dropna()
             price_values = group["close"].dropna()
             
@@ -782,6 +900,16 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
                     return score * weight
             return np.nan
         
+        
+        """
+        Heuristic for stability of atr
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
         def heuristic_atr_stability(group, col_name, weight, min_required=6):
             atr_values = group[col_name].dropna()
             
@@ -802,6 +930,16 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
                     return score * weight
             return np.nan
         
+        
+        """
+        Heuristic for contraction of atr
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
         def heuristic_atr_contraction(group, col_name, weight, min_required=6):
             atr_values = group[col_name].dropna()
             
@@ -903,7 +1041,11 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
         return overall_score
 
 
-
+    """
+    General heuristic for bb_width - Returns overal bb_width score
+    @param weights: list - list of weights for periods
+    @returns: float - overall cmf heuristic score
+    """   
     def heuristic_sticky_bb_width_tas(
         weights: list = [0.2, 0.3, 0.5],
     ) -> float:
@@ -934,13 +1076,18 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
             }
 
         
-        # Helper function to calculate heuristic with validation
+        """
+        Heuristic for price clustering of vwap
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @param norm_params: Calculated normalization values
+        @returns: float: score of individual heuristic
+        """
         def calculate_bb_heuristic_with_validation(group, col_name, weight, min_required, norm_params):
-            """
-            Calculate BB width heuristic for one period
-            
-            Lower BB width = Higher score (better for butterflies)
-            """
+
             bb_values = group[col_name].dropna()
             
             # Require minimum number of valid observations
@@ -1018,12 +1165,25 @@ def heuristic_sticky_volatility_tas(table_name: str, ta_indicator:str, start_tim
         raise Exception("Invalid ta indicator; Must be 'atr' or 'bb_width'")
  
 
+"""
+General heuristc func for trend ta indicators (adx & ema) - returns heuristic score of requested trend indicator
+@param table_name: str - Name of table
+@param ta_indicator: str - Momentum indicator to get heuristic on ('rsi' or 'roc')
+@param start_time_till_eod: int - Start time in minutes until end of day
+@param end_time_till_eof: int - End time in minutes until end of day
+@returns: pd.DataFrame
+
+"""
 def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_till_eod: int, end_time_till_eod:int) -> float:
         
+        
+    """
+    General heuristic for adx - Returns overal adx score
+    @param weights: list - list of weights for periods
+    @returns: float - overall adx heuristic score
+    """   
     def heuristic_sticky_adx_tas(weights: list = [0.4, 0.6]) -> float:
-        """
-        ADX heuristic targeting optimal range (15-25) for butterflies
-        """
+
         
         assert abs(sum(weights) - 1.0) < 0.001, "Weights must sum to 1"
         assert len(weights) == 2, "Must have exactly 2 weights"
@@ -1039,10 +1199,16 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
             end_time_till_eod=end_time_till_eod
         )
         
-        
-        def optimal_adx_score(x, min_len):
+        """
+        Heuristic for scoring adx
+                
+        @param group: group to aggregate by
+        @param min_len: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """
+        def optimal_adx_score(group, min_len):
             """Score ADX: peak at 15-25 range"""
-            x_clean = x.dropna()
+            x_clean = group.dropna()
             if len(x_clean) < min_len:
                 return np.nan
             
@@ -1057,8 +1223,8 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
                 return max(0, 1 - ((adx_mean - 25) / 25))  # Penalize trends
         
         daily_scores = filtered_df.groupby('day').agg({
-            'adx_6_isolated': lambda x: optimal_adx_score(x, 6) * weights[0],
-            'adx_12_isolated': lambda x: optimal_adx_score(x, 12) * weights[1]
+            'adx_6_isolated': lambda g: optimal_adx_score(g, 6) * weights[0],
+            'adx_12_isolated': lambda g: optimal_adx_score(g, 12) * weights[1]
         }).rename(columns={
             'adx_6_isolated': 'adx_6_heuristic',
             'adx_12_isolated': 'adx_12_heuristic'
@@ -1079,7 +1245,12 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
         return overall_score
     
     
-        
+    """
+    General heuristic for ema - Returns overal ema score
+    @param heuristic_weights: dict - dict of weights for heuristic
+    @param ema_period_weights: list - list of weights for periods
+    @returns: float - overall ema heuristic score
+    """   
     def heuristic_sticky_ema_tas(
         heuristic_weights: dict = {
             'oscillation_stability': 0.4,        # How close EMA_3 and EMA_6 are
@@ -1090,6 +1261,14 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
         ema_period_weights: list = [0.4, 0.6]  # [EMA_3 weight, EMA_6 weight]
     ) -> float:
 
+        """
+        Heuristic for oscillation stability of ema
+                
+        @param group: group to aggregate by
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """ 
         def heuristic_ema_oscillation_stability(group, weight, min_required=12):
             """
             Measures stability of the EMA_3-EMA_6 spread
@@ -1115,10 +1294,7 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
                     return np.nan
                 
                 spread_pct = (spread / price_level) * 100
-                
-                # Measure volatility of the spread (not absolute value)
-                # Low spread volatility = consolidation
-                # High spread volatility = trending or whipsaw
+
                 spread_std = spread_pct.std()
                 
                 # Based on your data, spread std ranges ~0.01-0.05%
@@ -1130,6 +1306,15 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
             
             return np.nan
 
+
+        """
+        Heuristic for cross frequency of ema
+                
+        @param group: group to aggregate by
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """ 
         def heuristic_ema_cross_frequency(group, weight, min_required=6):
             """
             Measures crossing frequency between EMA_3 and EMA_6
@@ -1167,7 +1352,14 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
             
             return np.nan
 
-
+        """
+        Heuristic for slope stability of atr
+                
+        @param group: group to aggregate by
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """ 
         def heuristic_ema_slope_stability(group, weight, min_required=6):
             """
             Measures EMA slope - flatter = better for butterflies
@@ -1192,6 +1384,15 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
             return np.nan
 
 
+        """
+        Heuristic for range compression of ema
+                
+        @param group: group to aggregate by
+        @param col_name: col to act upon
+        @param weight: weight to apply to heuristic
+        @param min_required: minimum number of entries for heuristic
+        @returns: float: score of individual heuristic
+        """ 
         def heuristic_ema_range_compression(group, ema_col, weight, min_required=6):
             """
             Measures range of a single EMA over the period
@@ -1215,8 +1416,6 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
                 return score * weight
             
             return np.nan
-        
-        
         
         
         assert abs(sum(heuristic_weights.values()) - 1.0) < 0.001, "Heuristic weights must sum to 1"
@@ -1305,7 +1504,15 @@ def heuristic_sticky_trend_tas(table_name: str, ta_indicator:str, start_time_til
         raise Exception("Invalid ta indicator; Must be 'adx' or 'ema'")
  
 
+"""
+Overarching callable for implemented ta indicators - returns respective heuristic score of requested indicator
+@param table_name: str - Name of table
+@param ta_indicator: str - Momentum indicator to get heuristic on ('rsi' or 'roc')
+@param start_time_till_eod: int - Start time in minutes until end of day
+@param end_time_till_eof: int - End time in minutes until end of day
+@returns: pd.DataFrame
 
+"""
 def general_heuristic_sticky_tas(table_name: str, ta_indicator:str, start_time_till_eod:int, end_time_till_eod:int) -> float:
     
     if ta_indicator in ["rsi", "roc"]:
@@ -1322,7 +1529,14 @@ def general_heuristic_sticky_tas(table_name: str, ta_indicator:str, start_time_t
     pass
 
 
+"""
+From PGSql table, make df calculating all heuristic score combinations of indicators and sessions
 
+@param table_name: str - Name of PGSql table
+@param indicators: list - List of ta indicators to inlcude in table
+@param sessions: dict - Dict of sessions to examine, of format session_name : (session start, session end)
+@returns: pd.DataFrame - Df of all scores
+"""
 def get_all_ta_info_by_session(table_name:str,
                                indicators: list = ["rsi", "roc", "vwap", "cmf", "atr", "bb_width", "adx", "ema"],
                                sessions: dict = {"overall": (390,0),
@@ -1346,7 +1560,7 @@ def get_all_ta_info_by_session(table_name:str,
                 end_time_till_eod=end_min,
             )
 
-    df["mean_heuristic_sscore"] = df.mean(axis=1, skipna=True)
+    df["mean_heuristic_score"] = df.mean(axis=1, skipna=True)
 
 
     return df
@@ -1382,7 +1596,7 @@ if __name__ == "__main__":
                                                  "15_00_to_15_30": (60, 30),
                                                  "15_30_to_16_00": (30, 0),
     
-                                                                                    
+                                                                                  
                                                  })
     
     print(scores)
