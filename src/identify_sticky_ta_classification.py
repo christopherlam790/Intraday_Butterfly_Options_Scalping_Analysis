@@ -1599,7 +1599,6 @@ if __name__ == "__main__":
                                                                                   
                                                  })
     
-    print(scores)
 
     
     pass
