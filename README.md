@@ -17,3 +17,19 @@ Analyzing the effectiveness of 0DTE butterfly scalping
 5. Backtest butterfly pricing across profit targets
 6. Benchmark vs structure-appropriate baselines
 7. Analyze failure modes explicitly
+
+# Workflow
+
+1. Raw data
+   a. json_manipulation.py
+   b. json_preprocessing.py
+   c. upload_raw_data.py
+   d. download_raw_data.py
+2. GK sticky regimes
+   a. identify_sticky_gk_regimes.py
+3. Sticky ta classifications
+   a. identify_sticky_ta_classification.py
+   b. upload_ta_classification.py
+   c. download_ta_classification.py
+   d. visualize_sticky_ta_classification.py
+4. Black-Scholes Pricing Backtest
