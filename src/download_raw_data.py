@@ -55,6 +55,6 @@ def get_raw_df_from_sql(table_name: str, fields: list = []) -> pd.DataFrame:
 TEST AREA
 """
 if __name__ == "__main__":
-    df = get_raw_df_from_sql("spy_2024_5_minute_annual")
+    df = get_raw_df_from_sql("spy_2024_5_minute_annual_data")
     
     print(df)
