@@ -52,6 +52,7 @@ def upload_data_as_postgressql(df: pd.DataFrame, table_name: str) -> None:
         high DOUBLE PRECISION,
         low DOUBLE PRECISION,
         number_of_trades BIGINT,
+        utc_timestamp BIGINT,
 
         rsi_3_isolated DOUBLE PRECISION,
         rsi_6_isolated DOUBLE PRECISION,
@@ -137,11 +138,11 @@ Testing Section
 if __name__ == "__main__":
 
 
-    df_sql = upload_raw_data(path="assets/raw/2024_5_minute/annual_2024_5_minute_SPY.json",
-                    cols_to_drop=["volume_weighted_average_price", "UTC_timestamp", "datetime"],
+    df_sql = upload_raw_data(path="assets/raw/2025_5_minute/annual_2025_5_minute_SPY.json",
+                    cols_to_drop=["volume_weighted_average_price", "datetime"],
                     rth=True)
 
-    upload_data_as_postgressql(df_sql, table_name="spy_2024_5_minute_annual")
+    upload_data_as_postgressql(df_sql, table_name="spy_2025_5_minute_annual_data")
     
     print("TESTING COMPLETE")
     

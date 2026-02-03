@@ -262,8 +262,8 @@ if __name__ == "__main__":
     
     df = get_json_results("assets/raw/2025_5_minute/annual_2025_5_minute_SPY.json")
     
-    cols_to_drop = ["volume_weighted_average_price", "UTC_timestamp", "datetime"]
+    cols_to_drop = ["volume_weighted_average_price", "datetime"]
 
     df = preprocess_data(df, cols_to_drop=cols_to_drop, rth=True)
 
-    print(df)
+    print(df["UTC_timestamp"].dtype)
