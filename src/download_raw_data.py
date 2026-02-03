@@ -43,6 +43,9 @@ def get_raw_df_from_sql(table_name: str, fields: list = []) -> pd.DataFrame:
         df = pd.read_sql(query, conn)
         conn.close()
 
+        df = df.loc[:, ~df.columns.duplicated()]
+
+
         df = df.set_index("date")
 
         return df
