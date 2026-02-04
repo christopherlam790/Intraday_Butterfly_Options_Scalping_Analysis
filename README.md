@@ -32,4 +32,5 @@ Analyzing the effectiveness of 0DTE butterfly scalping
    b. upload_ta_classification.py
    c. download_ta_classification.py
    d. visualize_sticky_ta_classification.py
-4. Black-Scholes Pricing Backtest
+4. Backtesting
+   a. OptionsAlpha (External backtest)
