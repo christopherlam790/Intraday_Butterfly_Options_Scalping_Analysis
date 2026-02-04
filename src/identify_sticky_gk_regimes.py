@@ -122,7 +122,12 @@ def visualize_sticky_volatility_probability_vs_time_to_eod(df: pd.DataFrame, plo
 
 
 
-
+"""
+General func for visualizing sticky vol by session/regime
+@param table_name: str - Name of PGSql table
+@param save_fig: bool - whether to save the figure
+@returns: None
+"""
 def identify_sticky_gk_regimes(table_name: str, save_fig: bool = False) -> None:
     df = get_sticky_regime_data(table_name=table_name)
     
@@ -133,6 +138,6 @@ def identify_sticky_gk_regimes(table_name: str, save_fig: bool = False) -> None:
 if __name__ == "__main__":
 
 
-    df = identify_sticky_gk_regimes(table_name="spy_2024_5_minute_annual", save_fig=True)
+    df = identify_sticky_gk_regimes(table_name="spy_2024_5_minute_annual_data", save_fig=True)
 
     print(df)
